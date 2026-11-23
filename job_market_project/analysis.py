@@ -1,35 +1,82 @@
+
+from pathlib import Path
+
 import pandas as pd
 import matplotlib.pyplot as plt
 
-jobs = pd.read_csv("job_postings.csv")
+# --------------------------------
+# 1. PROJECT PATHS
+# --------------------------------
+
+PROJECT_DIR = Path(__file__).resolve().parent.parent
+OUTPUT_DIR = PROJECT_DIR / "visualizations"
+
+OUTPUT_DIR.mkdir(exist_ok=True)
+
+jobs = pd.read_csv(PROJECT_DIR / "job_postings.csv")
+skills = pd.read_csv(PROJECT_DIR / "job_skills.csv")
+
+# --------------------------------
+# 2. HELPER FUNCTIONS
+# --------------------------------
+
+def save_chart(filename):
+    plt.tight_layout()
+    plt.savefig(OUTPUT_DIR / filename, dpi=300, bbox_inches="tight")
+    plt.show()
+    plt.close()
+
+def extract_skills(data):
+    return (
+        data["job_skills"]
+        .dropna()
+        .str.split(",")
+        .explode()
+        .str.strip()
+        .str.lower()
+    )
+
+# --------------------------------
+# 3. TOP 10 JOB TITLES
+# --------------------------------
 
 top_jobs = jobs["job_title"].value_counts().head(10)
 
+print("\nTop 10 Job Titles:")
 print(top_jobs)
 
-top_jobs.plot(kind="bar")
+top_jobs.sort_values().plot(kind="barh", figsize=(10, 6))
 
 plt.title("Top 10 Most Common Job Titles")
-plt.xlabel("Job Title")
-plt.ylabel("Number of Job Postings")
-
-plt.tight_layout()
-plt.show()
-skills = pd.read_csv("job_skills.csv")
-print(skills.shape)
-print(skills.columns)
-print(skills.head())
-all_skills = skills["job_skills"].dropna().str.split(",").explode()
-all_skills = all_skills.str.strip().str.lower()
-print(all_skills.value_counts().head(20))
-import matplotlib.pyplot as plt
-top_skills = all_skills.value_counts().head(10)
-top_skills.sort_values().plot(kind= "barh")
-plt.title("Top 10 Skills in Job Postings")
 plt.xlabel("Number of Job Postings")
+plt.ylabel("Job Title")
+
+save_chart("top_job_titles.png")
+
+# --------------------------------
+# 4. TOP 10 OVERALL SKILLS
+# --------------------------------
+
+all_skills = extract_skills(skills)
+skill_counts = all_skills.value_counts()
+
+top_skills = skill_counts.head(10)
+
+print("\nTop 10 Skills:")
+print(top_skills)
+
+top_skills.sort_values().plot(kind="barh", figsize=(10, 6))
+
+plt.title("Top 10 Most Requested Skills")
+plt.xlabel("Number of Skill Mentions")
 plt.ylabel("Skill")
-plt.tight_layout()
-plt.show()
+
+save_chart("top_skills.png")
+
+# --------------------------------
+# 5. DATA SCIENCE SKILLS
+# --------------------------------
+
 data_science_skills = [
     "python",
     "sql",
@@ -44,38 +91,25 @@ data_science_skills = [
     "deep learning"
 ]
 
-skill_counts = all_skills.value_counts()
+ds_skills = (
+    skill_counts[skill_counts.index.isin(data_science_skills)]
+    .sort_values()
+)
 
-for skill in data_science_skills:
-    print(skill, ":", skill_counts.get(skill, 0))
-    
+print("\nData Science Skills:")
+print(ds_skills)
 
-ds_skills = skill_counts[
-    skill_counts.index.isin(data_science_skills)
-].sort_values(ascending=True)
+ds_skills.plot(kind="barh", figsize=(10, 6))
 
-ds_skills.plot(kind="barh")
-
-plt.title("Data Science Skills in Job Postings")
-plt.xlabel("Number of Job Postings")
+plt.title("Demand for Data Science Skills")
+plt.xlabel("Number of Skill Mentions")
 plt.ylabel("Skill")
 
-plt.tight_layout()
-plt.show()
+save_chart("data_science_skills.png")
 
-
-data_jobs = jobs[
-    jobs["job_title"].str.contains(
-        "data|analyst|scientist|machine learning|business intelligence",
-        case=False,
-        na=False
-    )
-]
-
-print("\nNumber of Data-related jobs:", len(data_jobs))
-
-print("\nTop Data-related job titles:")
-print(data_jobs["job_title"].value_counts().head(20))
+# --------------------------------
+# 6. DATA CAREER CATEGORIES
+# --------------------------------
 
 job_categories = {
     "Data Engineer": "data engineer",
@@ -94,112 +128,86 @@ for category, keyword in job_categories.items():
         na=False
     ).sum()
 
-print("\nJob Categories:")
-for category, count in category_counts.items():
-    print(category, ":", count)
-    
 category_series = pd.Series(category_counts).sort_values()
 
-category_series.plot(kind="barh")
+print("\nCareer Categories:")
+print(category_series)
 
-plt.title("Data Career Categories in Job Postings")
+category_series.plot(kind="barh", figsize=(10, 6))
+
+plt.title("Data Career Categories")
 plt.xlabel("Number of Job Postings")
 plt.ylabel("Career Category")
 
-plt.tight_layout()
-plt.show()
+save_chart("career_categories.png")
 
+# --------------------------------
+# 7. SKILLS BY CAREER
+# --------------------------------
 
-analyst_jobs = jobs[
-    jobs["job_title"].str.contains("data analyst", case=False, na=False)
-]
+career_keywords = {
+    "data_analyst": "data analyst",
+    "data_engineer": "data engineer",
+    "data_scientist": "data scientist"
+}
 
-analyst_links = analyst_jobs["job_link"]
+for career, keyword in career_keywords.items():
 
-analyst_skills = skills[
-    skills["job_link"].isin(analyst_links)
-]
+    career_jobs = jobs[
+        jobs["job_title"].str.contains(
+            keyword,
+            case=False,
+            na=False
+        )
+    ]
 
-analyst_all_skills = (
-    analyst_skills["job_skills"]
-    .dropna()
-    .str.split(",")
-    .explode()
-    .str.strip()
-    .str.lower()
-)
+    career_links = career_jobs["job_link"]
 
-print("\nTop skills for Data Analyst jobs:")
-print(analyst_all_skills.value_counts().head(15))
+    career_skills = skills[
+        skills["job_link"].isin(career_links)
+    ]
 
-engineer_jobs = jobs[
-    jobs["job_title"].str.contains("data engineer", case=False, na=False)
-]
+    extracted = extract_skills(career_skills)
+    top_career_skills = extracted.value_counts().head(10)
 
-engineer_links = engineer_jobs["job_link"]
+    print(f"\nTop Skills for {career.replace('_', ' ').title()}:")
+    print(top_career_skills)
 
-engineer_skills = skills[
-    skills["job_link"].isin(engineer_links)
-]
+    if not top_career_skills.empty:
 
-engineer_all_skills = (
-    engineer_skills["job_skills"]
-    .dropna()
-    .str.split(",")
-    .explode()
-    .str.strip()
-    .str.lower()
-)
+        top_career_skills.sort_values().plot(
+            kind="barh",
+            figsize=(10, 6)
+        )
 
-print("\nTop skills for Data Engineer jobs:")
-print(engineer_all_skills.value_counts().head(15))
+        plt.title(
+            f"Top 10 Skills for {career.replace('_', ' ').title()} Jobs"
+        )
+        plt.xlabel("Number of Skill Mentions")
+        plt.ylabel("Skill")
 
+        save_chart(f"{career}_skills.png")
 
-scientist_jobs = jobs[
-    jobs["job_title"].str.contains("data scientist", case=False, na=False)
-]
-
-scientist_links = scientist_jobs["job_link"]
-
-scientist_skills = skills[
-    skills["job_link"].isin(scientist_links)
-]
-
-scientist_all_skills = (
-    scientist_skills["job_skills"]
-    .dropna()
-    .str.split(",")
-    .explode()
-    .str.strip()
-    .str.lower()
-)
-
-print("\nTop skills for Data Scientist jobs:")
-print(scientist_all_skills.value_counts().head(15))
-
+# --------------------------------
+# 8. FINAL SUMMARY
+# --------------------------------
 
 print("\n" + "=" * 50)
 print("JOB MARKET ANALYSIS - FINAL SUMMARY")
 print("=" * 50)
 
-print("\nDataset:")
-print("12,217 job postings")
-print("15 job-posting columns")
+print("\nNumber of job postings:", len(jobs))
 
-
-print("\nTop overall skills:")
-print("Python: 4810")
-print("SQL: 4619")
-print("Data Analysis: 3293")
-print("Machine Learning: 2684")
-print("Data Visualization: 2330")
+print("\nTop 5 overall skills:")
+print(skill_counts.head(5))
 
 print("\nCareer categories:")
-for category, count in category_counts.items():
-    print(category, ":", count)
+print(category_series)
 
-print("\nMain conclusions:")
-print("1. Python and SQL are highly demanded across data careers.")
-print("2. Data Analyst roles strongly emphasize analysis, SQL and visualization.")
-print("3. Data Engineer roles emphasize engineering, cloud and big-data technologies.")
-print("4. Data Scientist roles emphasize Python, machine learning, statistics and data science.")
+print("\nMain observations:")
+print("1. Python and SQL are important skills in data-related jobs.")
+print("2. Data Analyst roles emphasize analysis and visualization.")
+print("3. Data Engineer roles emphasize engineering technologies.")
+print("4. Data Scientist roles emphasize machine learning and statistics.")
+
+print("\nCharts saved successfully in:", OUTPUT_DIR)
